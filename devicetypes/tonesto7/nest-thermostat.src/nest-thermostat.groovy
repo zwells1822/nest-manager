@@ -1,31 +1,19 @@
 /**
  *  Nest Thermostat
  *	Author: Anthony S. (@tonesto7)
- *	Contributor: Ben W. (@desertBlade) & Eric S. (@E_Sch)
+ *	Co-Author: Eric S. (@E_Sch)
+ *	Contributor: Ben W. (@desertBlade)
  *  Graphing Modeled on code from Andreas Amann (@ahndee)
  *
- * Based off of the EcoBee thermostat under Templates in the IDE
- * Copyright (C) 2016 Anthony S., Ben W.
- * Permission is hereby granted, free of charge, to any person obtaining a copy of this
- * software and associated documentation files (the "Software"), to deal in the Software
- * without restriction, including without limitation the rights to use, copy, modify,
- * merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
- * permit persons to whom the Software is furnished to do so, subject to the following
- * conditions: The above copyright notice and this permission notice shall be included
- * in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
- * INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
- * PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
- * CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
- * OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ * Modelled after the EcoBee thermostat under Templates in the IDE
+ * Copyright (C) 2017 Anthony S.
+ * Licensing Info: Located at https://raw.githubusercontent.com/tonesto7/nest-manager/master/LICENSE.md
  */
 
 import java.text.SimpleDateFormat
 import groovy.time.*
 
-def devVer() { return "4.3.0"}
+def devVer() { return "4.4.0"}
 
 // for the UI
 metadata {
@@ -195,7 +183,7 @@ metadata {
 			state "unknown",	action: "setPresence", 	icon: "st.unknown.unknown.unknown"
 		}
 		standardTile("refresh", "device.refresh", width:2, height:2, decoration: "flat") {
-			state "default", label: 'refresh', action:"refresh.refresh", icon:"st.secondary.refresh-icon"
+			state "default", action:"refresh.refresh", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/refresh_icon.png"
 		}
 		valueTile("heatingSetpoint", "device.heatingSetpoint", width: 1, height: 1) {
 			state("heatingSetpoint", label:'${currentValue}', unit: "Heat", foregroundColor: "#FFFFFF",
@@ -2922,13 +2910,17 @@ def getGraphHTML() {
 			</head>
 			<body>
 				<table
+				  <col width="50%">
+				  <col width="50%">
+				  <thead>
+				    <th>Time to Target</th>
+				    <th>Sun Correction</th>
+				  </thead>
 				  <tbody>
 					<tr>
-					  <th>Time to Target</th>
-					  <th>Sun Correction</th>
+					  <td>${timeToTarget}</td>
+				  	  <td>${sunCorrectStr}</td>
 					</tr>
-					<td>${timeToTarget}</td>
-					<td>${sunCorrectStr}</td>
 				  </tbody>
 				</table>
 				<table>
@@ -2951,15 +2943,21 @@ def getGraphHTML() {
 				</tbody>
 			  </table>
 			  <table>
-				  <tbody>
+			    <col width="40%">
+			    <col width="20%">
+			    <col width="40%">
+			  	<thead>
+				  <th>Firmware Version</th>
+				  <th>Debug</th>
+				  <th>Device Type</th>
+				</thead>
+				<tbody>
 				  <tr>
-					<th>Firmware Version</th>
-					<th>Debug</th>
-					<th>Device Type</th>
+					<td>${state?.softwareVer.toString()}</td>
+  				    <td>${state?.debugStatus}</td>
+  				    <td>${state?.devTypeVer.toString()}</td>
 				  </tr>
-				  <td>${state?.softwareVer.toString()}</td>
-				  <td>${state?.debugStatus}</td>
-				  <td>${state?.devTypeVer.toString()}</td>
+
 				</tbody>
 			  </table>
 			  <table>

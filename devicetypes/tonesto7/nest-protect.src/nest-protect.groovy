@@ -1,28 +1,17 @@
 /**
  *  Nest Protect
- *	Authors: Anthony S. (@tonesto7), Ben W. (@desertblade), Eric S. (@E_Sch)
+ *	Author: Anthony S. (@tonesto7)
+ *	Co-Authors: Ben W. (@desertblade), Eric S. (@E_Sch)
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of this
- * software and associated documentation files (the "Software"), to deal in the Software
- * without restriction, including without limitation the rights to use, copy, modify,
- * merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
- * permit persons to whom the Software is furnished to do so, subject to the following
- * conditions: The above copyright notice and this permission notice shall be included
- * in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
- * INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
- * PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
- * CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
- * OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *	Copyright (C) 2017 Anthony S.
+ * 	Licensing Info: Located at https://raw.githubusercontent.com/tonesto7/nest-manager/master/LICENSE.md
  */
 
 import java.text.SimpleDateFormat
 
 preferences { }
 
-def devVer() { return "4.3.0" }
+def devVer() { return "4.4.0" }
 
 metadata {
 	definition (name: "${textDevName()}", author: "Anthony S.", namespace: "tonesto7") {
@@ -127,7 +116,7 @@ metadata {
 			state("default", label: 'Last Manual Test:\n${currentValue}')
 		}
 		standardTile("refresh", "device.refresh", width:2, height:2, decoration: "flat") {
-			state "default", label: 'refresh', action:"refresh.refresh", icon:"st.secondary.refresh-icon"
+			state "default", action:"refresh.refresh", icon:"https://raw.githubusercontent.com/tonesto7/nest-manager/master/Images/Devices/refresh_icon.png"
 		}
 		valueTile("lastUpdatedDt", "device.lastUpdatedDt", width: 4, height: 1, decoration: "flat", wordWrap: true) {
 			state("default", label: 'Data Last Received:\n${currentValue}')
@@ -776,14 +765,21 @@ def getInfoHtml() {
 					</tbody>
 			  </table>
 			  <table>
-				<tr>
+				<col width="40%">
+				<col width="20%">
+				<col width="40%">
+				<thead>
 				  <th>Firmware Version</th>
 				  <th>Debug</th>
 				  <th>Device Type</th>
-				</tr>
-				<td>v${state?.softwareVer.toString()}</td>
-				<td>${state?.debugStatus}</td>
-				<td>${state?.devTypeVer.toString()}</td>
+				</thead>
+				<tbody>
+				  <tr>
+					<td>v${state?.softwareVer.toString()}</td>
+				  	<td>${state?.debugStatus}</td>
+				  	<td>${state?.devTypeVer.toString()}</td>
+				  </tr>
+				</tbody>
 			  </table>
 			  <table>
 				<thead>
