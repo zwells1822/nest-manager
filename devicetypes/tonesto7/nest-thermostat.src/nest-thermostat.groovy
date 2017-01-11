@@ -231,7 +231,6 @@ metadata {
 				"heatSliderControl", "coolSliderControl", "graphHTML", "offBtn", "ecoBtn", "heatBtn", "coolBtn", "autoBtn", "blank", "refresh"] )
 	}
 	preferences {
-		input "virtual", "bool", title: "Virtual Device", description: "Does not change", displayDuringSetup: false
 		input "resetHistoryOnly", "bool", title: "Reset History Data", description: "", displayDuringSetup: false
 		input "resetAllData", "bool", title: "Reset All Stored Event Data", description: "", displayDuringSetup: false
 	}
@@ -307,17 +306,28 @@ def initialize() {
 
 void installed() {
 	Logger("installed...")
-	if(state?.virtual == null) {
-		if(virtual) {				   // preference passed in
-			Logger("Setting virtual to TRUE")
-			state.virtual = true
-		} else {
-			Logger("Setting virtual to FALSE")
-			state.virtual = false
-		}
-	}
+	checkVirtualStatus()
 	state.isInstalled = true
 	verifyHC()
+}
+
+void updated() {
+	Logger("Device Updated...")
+	checkVirtualStatus()
+}
+
+void checkVirtualStatus() {
+	if(getDataValue("isVirtual") == null && state?.virtual != null) {
+		def res = (state?.virtual instanceof Boolean) ? state?.virtual : false
+		Logger("Updating the device's 'isVirtual' data value to (${res})")
+		updateDataValue("isVirtual", "${res}")
+	} else {
+		def dVal = getDataValue("isVirtual").toString() == "true" ? true : false
+		if(dVal != state?.virtual || state?.virtual == null) {
+			state?.virtual = dVal
+			Logger("Setting virtual to ${dVal?.toString()?.toUpperCase()}")
+		}
+	}
 }
 
 void verifyHC() {
@@ -2630,7 +2640,7 @@ def getLast3MonthsUsageMap() {
 		for(int i=1; i<=3; i++) {
 			def newMap = [:]
 			def mName = getMonthNumToStr(mVal)
-			log.debug "$mName Usage - Idle: (${hm?."OperatingState_Month${mVal}_idle"}) | Heat: (${hm?."OperatingState_Month${mVal}_heating"}) | Cool: (${hm?."OperatingState_Month${mVal}_cooling"})"
+			//log.debug "$mName Usage - Idle: (${hm?."OperatingState_Month${mVal}_idle"}) | Heat: (${hm?."OperatingState_Month${mVal}_heating"}) | Cool: (${hm?."OperatingState_Month${mVal}_cooling"})"
 			newMap << ["cooling":["tSec":(hm?."OperatingState_Month${mVal}_cooling" ?: 0L), "iNum":cnt, "mName":mName]]
 			newMap << ["heating":["tSec":(hm?."OperatingState_Month${mVal}_heating" ?: 0L), "iNum":cnt, "mName":mName]]
 			newMap << ["idle":["tSec":(hm?."OperatingState_Month${mVal}_idle" ?: 0L), "iNum":cnt, "mName":mName]]
@@ -2856,28 +2866,29 @@ def getMaxTemp() {
 
 def getGraphHTML() {
 	try {
+		checkVirtualStatus()
 		//LogAction("State Size: ${getStateSize()} (${getStateSizePerc()}%)")
 		def canHeat = state?.can_heat == true ? true : false
 		def canCool = state?.can_cool == true ? true : false
 		def hasFan = state?.has_fan == true ? true : false
 		def leafImg = state?.hasLeaf ? getImgBase64(getImg("nest_leaf_on.gif"), "gif") : getImgBase64(getImg("nest_leaf_off.gif"), "gif")
 		def updateAvail = !state.updateAvailable ? "" : """
-        	<script>
-              vex.dialog.alert({
-                message: 'Device Update Available!',
-                className: 'vex-theme-top'
-               })
+			<script>
+			  vex.dialog.alert({
+				message: 'Device Update Available!',
+				className: 'vex-theme-top'
+			   })
 			</script>
-        """
+		"""
 
 		def clientBl = state?.clientBl ? """
-                <script>
-                  vex.dialog.alert({
-                    unsafeMessage: 'Your Manager client has been blacklisted! <br> <br> Please contact the Nest Manager developer to get the issue resolved!!!',
-                    className: 'vex-theme-top'
-                  })
+				<script>
+				  vex.dialog.alert({
+					unsafeMessage: 'Your Manager client has been blacklisted! <br> <br> Please contact the Nest Manager developer to get the issue resolved!!!',
+					className: 'vex-theme-top'
+				  })
 				</script>
-            """ : ""
+			""" : ""
 
 		def timeToTarget = device.currentState("timeToTarget").stringValue
 		def sunCorrectStr = state?.sunCorrectEnabled ? "Enabled (${state?.sunCorrectActive == true ? "Active" : "Inactive"})" : "Disabled"
@@ -2913,13 +2924,13 @@ def getGraphHTML() {
 				  <col width="50%">
 				  <col width="50%">
 				  <thead>
-				    <th>Time to Target</th>
-				    <th>Sun Correction</th>
+					<th>Time to Target</th>
+					<th>Sun Correction</th>
 				  </thead>
 				  <tbody>
 					<tr>
 					  <td>${timeToTarget}</td>
-				  	  <td>${sunCorrectStr}</td>
+						<td>${sunCorrectStr}</td>
 					</tr>
 				  </tbody>
 				</table>
@@ -2943,10 +2954,10 @@ def getGraphHTML() {
 				</tbody>
 			  </table>
 			  <table>
-			    <col width="40%">
-			    <col width="20%">
-			    <col width="40%">
-			  	<thead>
+				<col width="40%">
+				<col width="20%">
+				<col width="40%">
+				  <thead>
 				  <th>Firmware Version</th>
 				  <th>Debug</th>
 				  <th>Device Type</th>
@@ -2954,8 +2965,8 @@ def getGraphHTML() {
 				<tbody>
 				  <tr>
 					<td>${state?.softwareVer.toString()}</td>
-  				    <td>${state?.debugStatus}</td>
-  				    <td>${state?.devTypeVer.toString()}</td>
+					  <td>${state?.debugStatus}</td>
+					  <td>${state?.devTypeVer.toString()}</td>
 				  </tr>
 
 				</tbody>
@@ -3102,7 +3113,7 @@ def showChartHtml() {
 			if(canHeat) { m1Data.push("${heat}") }
 			if(canCool) { m1Data.push("${cool}") }
 			if(hasFan) { m1Data.push("${fanOn}") }
-	 	}
+		 }
 		if(iNum == 2) {
 			m2Data.push("'$mName'")
 			if(canHeat) { m2Data.push("${heat}") }
@@ -3225,29 +3236,29 @@ def showChartHtml() {
 			  var view = new google.visualization.DataView(data);
 			  view.setColumns([
 				${(useTabListSize >= 1) ? "0," : ""}
-			    ${(useTabListSize >= 1) ? "1, { calc: 'stringify', sourceColumn: 1, type: 'string', role: 'annotation' }${(useTabListSize > 1) ? "," : ""} // Heat Column": ""}
-			    ${(useTabListSize > 1) ? "2, { calc: 'stringify', sourceColumn: 2, type: 'string', role: 'annotation' }${(useTabListSize > 2) ? "," : ""} // Cool column" : ""}
-			    ${(useTabListSize > 2) ? "3, { calc: 'stringify', sourceColumn: 3, type: 'string', role: 'annotation' } // FanOn Column" : ""}
+				${(useTabListSize >= 1) ? "1, { calc: 'stringify', sourceColumn: 1, type: 'string', role: 'annotation' }${(useTabListSize > 1) ? "," : ""} // Heat Column": ""}
+				${(useTabListSize > 1) ? "2, { calc: 'stringify', sourceColumn: 2, type: 'string', role: 'annotation' }${(useTabListSize > 2) ? "," : ""} // Cool column" : ""}
+				${(useTabListSize > 2) ? "3, { calc: 'stringify', sourceColumn: 3, type: 'string', role: 'annotation' } // FanOn Column" : ""}
 			  ]);
 			  var options = {
-			    vAxis: {
-			      title: 'Hours'
-			    },
-			    seriesType: 'bars',
-			    colors: ['#FF9900', '#0066FF', '#884ae5'],
-			    chartArea: {
-			      left: '15%',
-			      right: '20%',
-			      top: '10%',
-			      bottom: '10%'
-			    }
+				vAxis: {
+				  title: 'Hours'
+				},
+				seriesType: 'bars',
+				colors: ['#FF9900', '#0066FF', '#884ae5'],
+				chartArea: {
+				  left: '15%',
+				  right: '20%',
+				  top: '10%',
+				  bottom: '10%'
+				}
 			  };
 
 			  var columnWrapper = new google.visualization.ChartWrapper({
-			    chartType: 'ComboChart',
-			    containerId: 'use_graph',
-			    dataTable: view,
-			    options: options
+				chartType: 'ComboChart',
+				containerId: 'use_graph',
+				dataTable: view,
+				options: options
 			  });
 			  columnWrapper.draw()
 		}
