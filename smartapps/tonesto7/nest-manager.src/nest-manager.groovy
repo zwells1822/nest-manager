@@ -40,12 +40,15 @@ definition(
 
 include 'asynchttp_v1'
 
-def appVersion() { "4.4.1" }
-def appVerDate() { "1-7-2017" }
+def appVersion() { "4.4.2" }
+def appVerDate() { "1-16-2017" }
 def appVerInfo() {
 	def str = ""
+	str += "V4.4.2 (January 16th, 2017):"
+	str += "\n▔▔▔▔▔▔▔▔▔▔▔"
+	str += "\n • FIXED: Lot's and lot's of bugs"
 
-	str += "V4.4.1 (January 7th, 2017):"
+	str += "\n\nV4.4.1 (January 7th, 2017):"
 	str += "\n▔▔▔▔▔▔▔▔▔▔▔"
 	str += "\n • UPDATE: Added the Nest Auth token to appData for easy management"
 
@@ -1572,34 +1575,39 @@ def compareDevMap(map1, map2, added, deleted, lastkey=null) {
 def currentDevMap(update=false) {
 	def res = [:]
 	def keys = ["thermostats", "vthermostats", "protects", "cameras", "presDevice", "weatherDevice"]
-	keys?.each { key ->
-		def items = [:]
-		def var = atomicState?."${key}"
-		if(var) {
-			if(res[key] == null) { res[key] = [:] }
-			var?.each { item ->
-				if(key == "presDevice") {
-					def val = [(getNestPresId().toString()):getNestPresLabel().toString()]
-					res[key] << val
-					//log.debug "val: ${val}"
-				}
-				else if(key == "weatherDevice") {
-					def val = [(getNestWeatherId().toString()):getNestWeatherLabel().toString()]
-					res[key] << val
-					//log.debug "val: ${val}"
-				} else {
-					if(item?.key) {
-						res[key] << [(item?.key):item?.value]
+	try {
+		keys?.each { key ->
+			def items = [:]
+			def var = atomicState?."${key}"
+			if(var) {
+				if(res[key] == null) { res[key] = [:] }
+				var?.each { item ->
+					if(key == "presDevice") {
+						def val = [(getNestPresId().toString()):getNestPresLabel().toString()]
+						res[key] << val
+						//log.debug "val: ${val}"
+					}
+					else if(key == "weatherDevice") {
+						def val = [(getNestWeatherId().toString()):getNestWeatherLabel().toString()]
+						res[key] << val
+						//log.debug "val: ${val}"
+					} else {
+						if(item?.key) {
+							res[key] << [(item?.key):item?.value]
+						}
 					}
 				}
 			}
 		}
+		res = ["instDevicesMap":res]
+		//log.debug "res: ${res}"
+		if(update) {
+			atomicState?.currentDevMap = res
+		} else { return res }
+	} catch (ex) {
+		log.error "currentDevMap Exception:", ex
+		sendExceptionData(ex, "currentDevMap")
 	}
-	res = ["instDevicesMap":res]
-	//log.debug "res: ${res}"
-	if(update) {
-		atomicState?.currentDevMap = res
-	} else { return res }
 	return ""
 }
 
@@ -1643,7 +1651,7 @@ def nestTokenResetPage() {
  ******************************************************************************/
 def installed() {
 	LogAction("Installed with settings: ${settings}", "debug", true)
-	if(!parent) {
+	if(!parent && atomicState?.installData == null) {
 		atomicState?.installData = ["initVer":appVersion(), "dt":getDtNow().toString(), "freshInstall":true, "shownDonation":false, "shownFeedback":false]
 		sendInstallSlackNotif()
 	}
@@ -1768,7 +1776,8 @@ def getInstAutoTypesDesc() {
 	def disItems = []
 	childApps?.each { a ->
 		def type = a?.getAutomationType()
-		if(a?.getIsAutomationDisabled()) {
+		def dis = a?.getIsAutomationDisabled()
+		if(dis) {
 			disItems.push(a?.label.toString())
 			dat["disabled"] = dat["disabled"] ? dat["disabled"]+1 : 1
 		} else {
@@ -2190,13 +2199,13 @@ def processResponse(resp, data) {
 		}
 		if((atomicState?.qdevRequested == false && atomicState?.qstrRequested == false) && (dev || atomicState?.needChildUpd)) { finishPoll(true, true) }
 
-	} catch (e) {
+	} catch (ex) {
 		apiIssueEvent(true)
 		atomicState.needChildUpd = true
 		atomicState.qstrRequested = false
 		atomicState.qdevRequested = false
 		atomicState.qmetaRequested = false
-		log.error "processResponse (type: $type) Exception:", e
+		log.error "processResponse (type: $type) Exception:", ex
 		if(type == "str") { atomicState.needStrPoll = true }
 		else if(type == "dev") { atomicState?.needDevPoll = true }
 		else if(type == "meta") { atomicState?.needMetaPoll = true }
@@ -5906,12 +5915,13 @@ def createInstallDataJson() {
 		def data = []
 		if(settings?.optInAppAnalytics || settings?.optInAppAnalytics == null) {
 			data =	[
-				"guid":atomicState?.installationId, "versions":versions, "thermostats":tstatCnt, "protects":protCnt, "vthermostats":vstatCnt, "cameras":camCnt, "appErrorCnt":appErrCnt, "devErrorCnt":devErrCnt,
-				"automations":automations, "timeZone":tz, "apiCmdCnt":apiCmdCnt, "appUseMetCnt":appUseMetCnt, "devUseMetCnt":devUseMetCnt, "stateUsage":"${getStateSizePerc()}%", "mobileClient":cltType, "datetime":getDtNow()?.toString()
+				"guid":atomicState?.installationId, "versions":versions, "thermostats":tstatCnt, "protects":protCnt, "vthermostats":vstatCnt, "cameras":camCnt, "appErrorCnt":appErrCnt, "devErrorCnt":devErrCnt, "installDt": atomicState?.installData?.dt,
+				"automations":automations, "timeZone":tz, "apiCmdCnt":apiCmdCnt, "appUseMetCnt":appUseMetCnt, "devUseMetCnt":devUseMetCnt, "stateUsage":"${getStateSizePerc()}%", "mobileClient":cltType, "datetime":getDtNow()?.toString(), "optOut":false
 			]
 		} else {
 			data = [
-				"guid":atomicState?.installationId, "optOut":true, "datetime":getDtNow()?.toString()
+				"guid":atomicState?.installationId, "versions":versions, "thermostats":tstatCnt, "protects":protCnt, "vthermostats":vstatCnt, "cameras":camCnt, "appErrorCnt":appErrCnt, "devErrorCnt":devErrCnt,
+				"automations":automations, "timeZone":tz, "apiCmdCnt":apiCmdCnt, "stateUsage":"${getStateSizePerc()}%", "datetime":getDtNow()?.toString(), "optOut":true
 			]
 		}
 		def resultJson = new groovy.json.JsonOutput().toJson(data)
@@ -5969,7 +5979,7 @@ def sendInstallSlackNotif() {
 	sendDataToSlack(json, "", "post", "New Client Slack Notif")
 }
 
-def getDbExceptPath() { return atomicState?.appData?.database?.exceptionPath ?: "errorData" }
+def getDbExceptPath() { return atomicState?.appData?.database?.exceptionPath ?: "exceptionData" }
 def getDbRemDiagPath() { return atomicState?.appData?.database?.remoteDiagPath ?: "remoteDiagLogs" }
 
 def sendExceptionData(ex, methodName, isChild = false, autoType = null) {
@@ -7186,32 +7196,38 @@ def remSendoSetCool(chgval, onTemp, offTemp) {
 	def remSenTstat = settings?.schMotTstat
 	def remSenTstatMir = settings?.schMotTstatMir
 
-	def hvacMode = remSenTstat ? remSenTstat?.currentThermostatMode.toString() : null
-	def curCoolSetpoint = getTstatSetpoint(remSenTstat, "cool")
-	def curHeatSetpoint = getTstatSetpoint(remSenTstat, "heat")
-	def tempChangeVal = !remSenTstatTempChgVal ? 5.0 : Math.min(Math.max(remSenTstatTempChgVal.toDouble(), 2.0), 5.0)
-	def maxTempChangeVal = tempChangeVal * 3
+	try {
+		def hvacMode = remSenTstat ? remSenTstat?.currentThermostatMode.toString() : null
+		def curCoolSetpoint = getTstatSetpoint(remSenTstat, "cool")
+		def curHeatSetpoint = getTstatSetpoint(remSenTstat, "heat")
+		def tempChangeVal = !remSenTstatTempChgVal ? 5.0 : Math.min(Math.max(remSenTstatTempChgVal.toDouble(), 2.0), 5.0)
+		def maxTempChangeVal = tempChangeVal * 3
 
-	chgval = (chgval > (onTemp + maxTempChangeVal)) ? onTemp + maxTempChangeVal : chgval
-	chgval = (chgval < (offTemp - maxTempChangeVal)) ? offTemp - maxTempChangeVal : chgval
-	if(chgval != curCoolSetpoint) {
-		scheduleAutomationEval(60)
-		def cHeat = null
-		if(hvacMode in ["auto"]) {
-			if(curHeatSetpoint >= (offTemp-tempChangeVal)) {
-				cHeat = offTemp - tempChangeVal
-				LogAction("Remote Sensor: HEAT - Adjusting HeatSetpoint to (${cHeat}°${getTemperatureScale()}) to allow COOL setting", "info", true)
-				if(remSenTstatMir) { remSenTstatMir*.setHeatingSetpoint(cHeat) }
+		chgval = (chgval > (onTemp + maxTempChangeVal)) ? onTemp + maxTempChangeVal : chgval
+		chgval = (chgval < (offTemp - maxTempChangeVal)) ? offTemp - maxTempChangeVal : chgval
+		if(chgval != curCoolSetpoint) {
+			scheduleAutomationEval(60)
+			def cHeat = null
+			if(hvacMode in ["auto"]) {
+				if(curHeatSetpoint >= (offTemp-tempChangeVal)) {
+					cHeat = offTemp - tempChangeVal
+					LogAction("Remote Sensor: HEAT - Adjusting HeatSetpoint to (${cHeat}°${getTemperatureScale()}) to allow COOL setting", "info", true)
+					if(remSenTstatMir) { remSenTstatMir*.setHeatingSetpoint(cHeat) }
+				}
 			}
+			if(setTstatAutoTemps(remSenTstat, chgval, cHeat)) {
+				//LogAction("Remote Sensor: COOL - Adjusting CoolSetpoint to (${chgval}°${getTemperatureScale()}) ", "info", true)
+				//storeLastAction("Adjusted Cool Setpoint to (${chgval}°${getTemperatureScale()}) Heat Setpoint to (${cHeat}°${getTemperatureScale()})", getDtNow())
+				if(remSenTstatMir) { remSenTstatMir*.setCoolingSetpoint(chgval) }
+			}
+			return  true // let all this take effect
+		} else {
+			LogAction("Remote Sensor: COOL - CoolSetpoint is already (${chgval}°${getTemperatureScale()}) ", "info", true)
 		}
-		if(setTstatAutoTemps(remSenTstat, chgval, cHeat)) {
-			//LogAction("Remote Sensor: COOL - Adjusting CoolSetpoint to (${chgval}°${getTemperatureScale()}) ", "info", true)
-			//storeLastAction("Adjusted Cool Setpoint to (${chgval}°${getTemperatureScale()}) Heat Setpoint to (${cHeat}°${getTemperatureScale()})", getDtNow())
-			if(remSenTstatMir) { remSenTstatMir*.setCoolingSetpoint(chgval) }
-		}
-		return  true // let all this take effect
-	} else {
-		LogAction("Remote Sensor: COOL - CoolSetpoint is already (${chgval}°${getTemperatureScale()}) ", "info", true)
+
+	} catch (ex) {
+		log.error "remSendoSetCool Exception:", ex
+		parent?.sendExceptionData(ex, "remSendoSetCool", true, getAutoType())
 	}
 	return  false
 }
@@ -7220,32 +7236,38 @@ def remSendoSetHeat(chgval, onTemp, offTemp) {
 	def remSenTstat = schMotTstat
 	def remSenTstatMir = schMotTstatMir
 
-	def hvacMode = remSenTstat ? remSenTstat?.currentThermostatMode.toString() : null
-	def curCoolSetpoint = getTstatSetpoint(remSenTstat, "cool")
-	def curHeatSetpoint = getTstatSetpoint(remSenTstat, "heat")
-	def tempChangeVal = !remSenTstatTempChgVal ? 5.0 : Math.min(Math.max(remSenTstatTempChgVal.toDouble(), 2.0), 5.0)
-	def maxTempChangeVal = tempChangeVal * 3
+	try {
+		def hvacMode = remSenTstat ? remSenTstat?.currentThermostatMode.toString() : null
+		def curCoolSetpoint = getTstatSetpoint(remSenTstat, "cool")
+		def curHeatSetpoint = getTstatSetpoint(remSenTstat, "heat")
+		def tempChangeVal = !remSenTstatTempChgVal ? 5.0 : Math.min(Math.max(remSenTstatTempChgVal.toDouble(), 2.0), 5.0)
+		def maxTempChangeVal = tempChangeVal * 3
 
-	chgval = (chgval < (onTemp - maxTempChangeVal)) ? onTemp - maxTempChangeVal : chgval
-	chgval = (chgval > (offTemp + maxTempChangeVal)) ? offTemp + maxTempChangeVal : chgval
-	if(chgval != curHeatSetpoint) {
-		scheduleAutomationEval(60)
-		def cCool = null
-		if(hvacMode in ["auto"]) {
-			if(curCoolSetpoint <= (offTemp+tempChangeVal)) {
-				cCool = offTemp + tempChangeVal
-				LogAction("Remote Sensor: COOL - Adjusting CoolSetpoint to (${cCool}°${getTemperatureScale()}) to allow HEAT setting", "info", true)
-				if(remSenTstatMir) { remSenTstatMir*.setCoolingSetpoint(cCool) }
+		chgval = (chgval < (onTemp - maxTempChangeVal)) ? onTemp - maxTempChangeVal : chgval
+		chgval = (chgval > (offTemp + maxTempChangeVal)) ? offTemp + maxTempChangeVal : chgval
+		if(chgval != curHeatSetpoint) {
+			scheduleAutomationEval(60)
+			def cCool = null
+			if(hvacMode in ["auto"]) {
+				if(curCoolSetpoint <= (offTemp+tempChangeVal)) {
+					cCool = offTemp + tempChangeVal
+					LogAction("Remote Sensor: COOL - Adjusting CoolSetpoint to (${cCool}°${getTemperatureScale()}) to allow HEAT setting", "info", true)
+					if(remSenTstatMir) { remSenTstatMir*.setCoolingSetpoint(cCool) }
+				}
 			}
+			if(setTstatAutoTemps(remSenTstat, cCool, chgval)) {
+				//LogAction("Remote Sensor: HEAT - Adjusting HeatSetpoint to (${chgval}°${getTemperatureScale()})", "info", true)
+				//storeLastAction("Adjusted Heat Setpoint to (${chgval}°${getTemperatureScale()}) Cool Setpoint to (${cCool}°${getTemperatureScale()})", getDtNow())
+				if(remSenTstatMir) { remSenTstatMir*.setHeatingSetpoint(chgval) }
+			}
+			return  true // let all this take effect
+		} else {
+			LogAction("Remote Sensor: HEAT - HeatSetpoint is already (${chgval}°${getTemperatureScale()})", "info", true)
 		}
-		if(setTstatAutoTemps(remSenTstat, cCool, chgval)) {
-			//LogAction("Remote Sensor: HEAT - Adjusting HeatSetpoint to (${chgval}°${getTemperatureScale()})", "info", true)
-			//storeLastAction("Adjusted Heat Setpoint to (${chgval}°${getTemperatureScale()}) Cool Setpoint to (${cCool}°${getTemperatureScale()})", getDtNow())
-			if(remSenTstatMir) { remSenTstatMir*.setHeatingSetpoint(chgval) }
-		}
-		return  true // let all this take effect
-	} else {
-		LogAction("Remote Sensor: HEAT - HeatSetpoint is already (${chgval}°${getTemperatureScale()})", "info", true)
+
+	} catch (ex) {
+		log.error "remSendoSetHeat Exception:", ex
+		parent?.sendExceptionData(ex, "remSendoSetHeat", true, getAutoType())
 	}
 	return  false
 }
@@ -8402,7 +8424,7 @@ def extTmpTempCheck(cTimeOut = false) {
 							modeEco = true
 							rmsg = "${extTmpTstat.label} turned 'ECO': External Temp is at the temp threshold for (${getEnumValue(longTimeSecEnum(), extTmpOffDelay)})"
 							if(extTmpTstatMir) {
-								setMultipleTstatMode(extTmpTstatMir, "eco") {
+								if(setMultipleTstatMode(extTmpTstatMir, "eco")) {
 									LogAction("Mirroring (ECO) Mode to ${extTmpTstatMir}", "info", true)
 								}
 							}
@@ -8669,7 +8691,7 @@ def conWatCheck(cTimeOut = false) {
 							atomicState?.conWatCloseDt = getDtNow()
 							scheduleTimeoutRestore(pName)
 							if(conWatTstatMir) {
-								setMultipleTstatMode(conWatTstatMir, "eco") {
+								if(setMultipleTstatMode(conWatTstatMir, "eco")) {
 									LogAction("Mirroring (ECO) Mode to ${conWatTstatMir}", "info", true)
 								}
 							}
@@ -9807,6 +9829,11 @@ def setTstatTempCheck() {
 						storeLastAction("Set ${tstat} Mode to ${strCapitalize(newHvacMode)}", getDtNow())
 						LogAction("setTstatTempCheck: Setting Thermostat Mode to '${strCapitalize(newHvacMode)}' on (${tstat})", "info", true)
 					} else { LogAction("setTstatTempCheck: Error Setting Thermostat Mode to '${strCapitalize(newHvacMode)}' on (${tstat})", "warn", true) }
+					if(tstatMir) {
+						if(setMultipleTstatMode(tstatMir, newHvacMode)) {
+							LogAction("Mirroring (${newHvacMode}) to ${tstatMir}", "info", true)
+						}
+					}
 				}
 
 				curMode = tstat?.currentnestThermostatMode?.toString()
@@ -11461,7 +11488,7 @@ def autoScheduleOk(autoType) {
 		return (modeOk && dayOk && timeOk) ? true : false
 	} catch (ex) {
 		log.error "${autoType}-autoScheduleOk Exception:", ex
-		parent?.sendExceptionData(ex, "${autoType}-autoScheduleOk", true, getAutoType())
+		parent?.sendExceptionData(ex, "autoScheduleOk", true, getAutoType())
 	}
 }
 
@@ -11796,7 +11823,7 @@ def getTstatCapabilities(tstat, autoType, dyn = false) {
 		atomicState?."${autoType}${dyn ? "_${tstat?.deviceNetworkId}_" : ""}TstatHasFan" = hasFan
 	} catch (ex) {
 		log.error "getTstatCapabilities Exception:", ex
-		parent?.sendExceptionData("${tstat} - ${autoType} | ${ex.message}", "getTstatCapabilities", true, getAutoType())
+		parent?.sendExceptionData(ex, "getTstatCapabilities", true, getAutoType())
 	}
 }
 
@@ -11944,7 +11971,7 @@ def setTstatMode(tstat, mode) {
 def setMultipleTstatMode(tstats, mode) {
 	def result = false
 	try {
-		if(tstats && md) {
+		if(tstats && mode) {
 			tstats?.each { ts ->
 				if(setTstatMode(ts, mode)) {
 					LogAction("Setting ${ts} Mode to (${mode})", "info", true)

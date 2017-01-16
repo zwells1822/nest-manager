@@ -13,7 +13,7 @@
 import java.text.SimpleDateFormat
 import groovy.time.*
 
-def devVer() { return "4.4.0"}
+def devVer() { return "4.4.1"}
 
 // for the UI
 metadata {
@@ -1838,7 +1838,9 @@ def exceptionDataHandler(msg, methodName) {
 	} else {
 		if(msg && methodName) {
 			def msgString = "${msg}"
-			parent?.sendChildExceptionData("thermostat", devVer(), msgString, methodName)
+			def ttype = "thermostat"
+			if(virtType()) { ttype = "vthermostat" }
+			parent?.sendChildExceptionData(ttype, devVer(), msgString, methodName)
 		}
 	}
 }
