@@ -1,14 +1,14 @@
 V4.4.2 (January 16th, 2017):
-\n▔▔▔▔▔▔▔▔▔▔▔
-\n • FIXED: Lot's and lot's of bugs
+▔▔▔▔▔▔▔▔▔▔▔
+ • FIXED: Lot's and lot's of bugs
 
-\n\nV4.4.2 (January 16th, 2017):
-\n▔▔▔▔▔▔▔▔▔▔▔
-\n • FIXED: Lot's and lot's of bugs
+V4.4.2 (January 16th, 2017):
+▔▔▔▔▔▔▔▔▔▔▔
+ • FIXED: Lot's and lot's of bugs
 
-\n\nV4.4.1 (January 7th, 2017):
-\n▔▔▔▔▔▔▔▔▔▔▔
-\n • UPDATE: Added the Nest Auth token to appData for easy management
+V4.4.1 (January 7th, 2017):
+▔▔▔▔▔▔▔▔▔▔▔
+ • UPDATE: Added the Nest Auth token to appData for easy management
 
 \n\nV4.4.0 (January 7th, 2017):
 \n▔▔▔▔▔▔▔▔▔▔▔
