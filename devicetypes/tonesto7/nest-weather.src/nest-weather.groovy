@@ -12,7 +12,7 @@ import java.text.SimpleDateFormat
 
 preferences {  }
 
-def devVer() { return "4.4.0" }
+def devVer() { return "4.5.0" }
 
 metadata {
 	definition (name: "${textDevName()}", namespace: "tonesto7", author: "Anthony S.") {
@@ -49,7 +49,10 @@ metadata {
 		attribute "dewpoint", "string"
 		attribute "visibility", "string"
 		attribute "alert", "string"
+		attribute "alert2", "string"
+		attribute "alert3", "string"
 		attribute "alertKeys", "string"
+		attribute "weatherObservedDt", "string"
 	}
 
 	simulator { }
@@ -120,27 +123,39 @@ void checkStateClear() {
 	//LogAction("Device State Data: ${getState()}")
 }
 
+def initialize() {
+	Logger("initialize")
+	verifyHC()
+}
+
 void installed() {
 	Logger("installed...")
-	verifyHC()
+	initialize()
+	state.isInstalled = true
+}
+
+void updated() {
+	Logger("updated...")
+	initialize()
+}
+
+def getHcTimeout() {
+	def to = state?.hcTimeout
+	return ((to instanceof Integer) ? to.toInteger() : 60)*60
 }
 
 void verifyHC() {
 	def val = device.currentValue("checkInterval")
-	def timeOut = state?.hcTimeout ?: 60
-	if(!val || val.toInteger() != (timeOut.toInteger() * 60)) {
+	def timeOut = getHcTimeout()
+	if(!val || val.toInteger() != timeOut) {
 		Logger("verifyHC: Updating Device Health Check Interval to $timeOut")
-		sendEvent(name: "checkInterval", value: 60 * timeOut.toInteger(), data: [protocol: "cloud"], displayed: false)
+		sendEvent(name: "checkInterval", value: timeOut, data: [protocol: "cloud"], displayed: false)
 	}
 }
 
 def ping() {
 	Logger("ping...")
-	refresh()
-}
-
-def initialize() {
-	Logger("initialize")
+	keepAwakeEvent()
 }
 
 def parse(String description) {
@@ -149,9 +164,14 @@ def parse(String description) {
 
 def configure() { }
 
+def compileForC() {
+	def retVal = false   // if using C mode, set this to true so that enums and colors are correct (due to ST issue of compile time evaluation)
+	return retVal
+}
+
 def getTempColors() {
 	def colorMap
-	if (wantMetric()) {
+	if (compileForC()) {
 		colorMap = [
 			// Celsius Color Range
 			[value: 0, color: "#153591"],
@@ -195,6 +215,10 @@ def generateEvent(Map eventData) {
 }
 
 void processEvent() {
+	if(state?.swVersion != devVer()) {
+		initialize()
+		state.swVersion = devVer()
+	}
 	def eventData = state?.eventData
 	state.eventData = null
 	checkStateClear()
@@ -210,14 +234,9 @@ void processEvent() {
 			state.tempUnit = getTemperatureScale()
 
 			//LogAction("processEvent Parsing data ${eventData}", "trace")
-
-			if(eventData.hcTimeout && state?.hcTimeout != eventData?.hcTimeout) {
+			if(eventData.hcTimeout && (state?.hcTimeout != eventData?.hcTimeout || !state?.hcTimeout)) {
 				state.hcTimeout = eventData?.hcTimeout
 				verifyHC()
-			}
-			if(state?.swVersion != devVer()) {
-				installed()
-				state.swVersion = devVer()
 			}
 			state.clientBl = eventData?.clientBl == true ? true : false
 			state.mobileClientType = eventData?.mobileClientType
@@ -313,18 +332,29 @@ def debugOnEvent(debug) {
 	} else { LogAction("debugOn: (${dVal}) | Original State: (${val})") }
 }
 
-def lastUpdatedEvent() {
+def lastUpdatedEvent(sendEvt=false) {
 	def now = new Date()
 	def formatVal = state.useMilitaryTime ? "MMM d, yyyy - HH:mm:ss" : "MMM d, yyyy - h:mm:ss a"
 	def tf = new SimpleDateFormat(formatVal)
 		tf.setTimeZone(getTimeZone())
 	def lastDt = "${tf?.format(now)}"
-	def lastUpd = device.currentState("lastUpdatedDt")?.value
 	state?.lastUpdatedDt = lastDt?.toString()
-	if(!lastUpd.equals(lastDt?.toString())) {
+	state?.lastUpdatedDtFmt = formatDt(now)
+	if(sendEvt) {
 		LogAction("Last Parent Refresh time: (${lastDt}) | Previous Time: (${lastUpd})")
-		sendEvent(name: 'lastUpdatedDt', value: lastDt?.toString(), displayed: false, isStateChange: true)
+		sendEvent(name: 'lastUpdatedDt', value: formatDt(now)?.toString(), displayed: false, isStateChange: true)
 	}
+}
+
+def keepAwakeEvent() {
+	def lastDt = state?.lastUpdatedDtFmt
+	if(lastDt) {
+		def ldtSec = getTimeDiffSeconds(lastDt)
+		log.debug "ldtSec: $ldtSec"
+		if(ldtSec < 1900) {
+			lastUpdatedEvent(true)
+		} else { refresh() }
+	} else { refresh() }
 }
 
 def apiStatusEvent(issue) {
@@ -468,6 +498,14 @@ def getWeatherConditions(Map weatData) {
 
 				sendEvent(name: "uvindex", value: cur?.current_observation?.UV)
 				sendEvent(name: "ultravioletIndex", value: cur?.current_observation?.UV)
+				def obsrDt = cur?.current_observation?.observation_time_rfc822
+				if(obsrDt) {
+					def newDt = formatDt(Date.parse("EEE, dd MMM yyyy HH:mm:ss Z", obsrDt?.toString()))
+					if(isStateChange(device, "weatherObservedDt", newDt.toString())) {
+						sendEvent(name: "weatherObservedDt", value: newDt)
+					}
+					//log.debug "newDt: $newDt"
+				}
 				LogAction("${state?.curWeatherLoc} Weather | humidity: ${state?.curWeatherHum} | temp_f: ${state?.curWeatherTemp_f} | temp_c: ${state?.curWeatherTemp_c} | Current Conditions: ${state?.curWeatherCond}")
 			}
 		}
@@ -526,6 +564,30 @@ def getWeatherAstronomy(weatData) {
 	}
 }
 
+def clearAlerts() {
+	def newKeys = []
+	sendEvent(name: "alertKeys", value: newKeys.encodeAsJSON(), displayed: false)
+
+	def noneString = ""
+	def cntr = 1
+	def aname = "alert"
+	while (cntr <= 3) {
+		sendEvent(name: "${aname}", value: noneString, descriptionText: "${device.displayName} has no current weather alerts")
+
+		state."walert${cntr}" = noneString
+		state."walertMessage${cntr}" = null
+
+		cntr += 1
+		aname = "alert${cntr}"
+	}
+	state.lastWeatherAlertNotif = null
+	state.walertCount = 0
+
+	// below are old variables from prior releases
+	state.remove("walert")
+	state.remove("walertMessage")
+}
+
 def getWeatherAlerts(weatData) {
 	try {
 		if(!weatData) {
@@ -543,63 +605,74 @@ def getWeatherAlerts(weatData) {
 				def oldKeys = device.currentState("alertKeys")?.jsonValue
 				//LogAction("${device.displayName}: oldKeys: $oldKeys")
 
-				if(state?.walert == null) {
-					state.walert = ""
-					state.walertMessage = null
-				}
-
 				def noneString = ""
-				if (newkeys == [] && (oldKeys == null || oldKeys == [])) {
-					sendEvent(name: "alertKeys", value: newKeys.encodeAsJSON(), displayed: false)
-					sendEvent(name: "alert", value: noneString, descriptionText: "${device.displayName} has no current weather alerts")
-					state.walert = noneString
-					state.walertMessage = null
-					state.lastWeatherAlertNotif = null
+
+				if (oldKeys == null) { oldKeys = [] }
+				if(state?.lastWeatherAlertNotif == null) { state?.lastWeatherAlertNotif = [] }
+
+				if(state?.walert != null) { oldKeys = []; state.walert = null }	// this is code for this upgrade
+
+				if(newkeys == [] && !(oldKeys == [])) {
+					clearAlerts()
 				}
 				else if (newKeys != oldKeys) {
-					if (oldKeys == null) {
-						oldKeys = []
-					}
 					sendEvent(name: "alertKeys", value: newKeys.encodeAsJSON(), displayed: false)
 
+					def totalAlerts = newKeys.size()
+					def cntr = 1
 					def newAlerts = false
-					alerts.each {alert ->
-						if (!oldKeys.contains(alert.type + alert.date_epoch)) {
-							if(alert?.description == null) {
-								Logger("null alert.description")
-								return true
-							}
-							if(alert?.message == null) {
-								Logger("null alert.message")
-								return true
-							}
-							def msg = "${alert.description} from ${alert.date} until ${alert.expires}"
-							sendEvent(name: "alert", value: pad(alert.description), descriptionText: msg)
-							newAlerts = true
-							state.walert = pad(alert.description) // description
-							state.walertMessage = pad(alert.message) // message
+					def newWalertNotif = []
 
-							// Try to format message some
-							state.walertMessage = state.walertMessage.replaceAll(/\.\.\./, ' ')
-							state.walertMessage = state.walertMessage.replaceAll(/\*/, '')
-							state.walertMessage = state.walertMessage.replaceAll(/\n\n\n/, '\n\n')
-							state.walertMessage = state.walertMessage.replaceAll(/\n\n\n/, '\n\n')
-							state.walertMessage = state.walertMessage.replaceAll(/\n\n\n/, '\n\n')
-							state.walertMessage = state.walertMessage.replaceAll(/\n\n/, '<br>')
-							state.walertMessage = state.walertMessage.replaceAll(/\n/, ' ')
-
-							if(state?.weatherAlertNotify && (alert?.message.toString() != state?.lastWeatherAlertNotif.toString())) {
-								sendNofificationMsg("WEATHER ALERT: ${alert?.message}", "Warn")
-								state?.lastWeatherAlertNotif = alert?.message
-							}
+					alerts.each { alert ->
+						def thisKey = alert.type + alert.date_epoch
+						if(alert?.description == null) {
+							Logger("null alert.description")
+							return true
 						}
-					}
+						if(alert?.message == null) {
+							Logger("null alert.message")
+							return true
+						}
+						def msg = "${alert.description} from ${alert.date} until ${alert.expires}"
+						def aname = "alert"
+						if(cntr > 1) {
+							aname = "alert${cntr}"
+						}
+						def statechange = oldKeys.contains(alert.type + alert.date_epoch) ? false : true
+						sendEvent(name: "${aname}", value: pad(alert.description), descriptionText: msg, isStateChange: statechange, displayed: statechange)
 
-					if (!newAlerts && device.currentValue("alert") != noneString) {
-						sendEvent(name: "alert", value: noneString, descriptionText: "${device.displayName} has no current weather alerts")
-						state.walert = noneString
-						state.walertMessage = null
-						state.lastWeatherAlertNotif = null
+						if(statechange) { newAlerts = true }
+
+						def walert = pad(alert.description) // description
+						def walertMessage = pad(alert.message) // message
+
+						// Try to format message some
+						walertMessage = walertMessage.replaceAll(/\.\.\./, ' ')
+						walertMessage = walertMessage.replaceAll(/\*/, '')
+						walertMessage = walertMessage.replaceAll(/\n\n\n/, '\n\n')
+						walertMessage = walertMessage.replaceAll(/\n\n\n/, '\n\n')
+						walertMessage = walertMessage.replaceAll(/\n\n\n/, '\n\n')
+						walertMessage = walertMessage.replaceAll(/\n\n/, '<br>')
+						walertMessage = walertMessage.replaceAll(/\n/, ' ')
+
+						state."walert${cntr}" = walert
+						state."walertMessage${cntr}" = walertMessage
+
+						if(state?.weatherAlertNotify) {
+							if(statechange && !(thisKey in state.lastWeatherAlertNotif)) {
+								sendNofificationMsg("WEATHER ALERT: ${alert?.message}", "Warn")
+							}
+							newWalertNotif << thisKey
+						}
+						state.walertCount = cntr
+
+						if(cntr < 3) { cntr += 1 } else { log.error "Many Alerts"; return true }
+					}
+					state?.lastWeatherAlertNotif = newWalertNotif
+
+					if(totalAlerts == 0 && device.currentValue("alert") != noneString) {
+						log.error "clearing alerts again"
+						clearAlerts()
 					}
 				}
 			}
@@ -907,23 +980,12 @@ def getJS(url){
 def getCssData() {
 	def cssData = null
 	def htmlInfo = state?.htmlInfo
+	state?.cssData = null
 	if(htmlInfo?.cssUrl && htmlInfo?.cssVer) {
-		if(state?.cssData) {
-			if (state?.cssVer?.toInteger() == htmlInfo?.cssVer?.toInteger()) {
-				//LogAction("getCssData: CSS Data is Current | Loading Data from State...")
-				cssData = state?.cssData
-			} else if (state?.cssVer?.toInteger() < htmlInfo?.cssVer?.toInteger()) {
-				//LogAction("getCssData: CSS Data is Outdated | Loading Data from Source...")
-				cssData = getFileBase64(htmlInfo.cssUrl, "text", "css")
-				state.cssData = cssData
-				state?.cssVer = htmlInfo?.cssVer
-			}
-		} else {
-			//LogAction("getCssData: CSS Data is Missing | Loading Data from Source...")
-			cssData = getFileBase64(htmlInfo.cssUrl, "text", "css")
-			state?.cssData = cssData
-			state?.cssVer = htmlInfo?.cssVer
-		}
+		//LogAction("getCssData: CSS Data is Missing | Loading Data from Source...")
+		cssData = getFileBase64(htmlInfo.cssUrl, "text", "css")
+		state?.cssData = cssData
+		state?.cssVer = htmlInfo?.cssVer
 	} else {
 		//LogAction("getCssData: No Stored CSS Data Found for Device... Loading for Static URL...")
 		cssData = getFileBase64(cssUrl(), "text", "css")
@@ -960,7 +1022,7 @@ def getChartJsData() {
 	return chartJsData
 }
 
-def cssUrl() { return "https://raw.githubusercontent.com/desertblade/ST-HTMLTile-Framework/master/css/smartthings.css" }
+def cssUrl() { return "https://raw.githubusercontent.com/tonesto7/nest-manager/master/Documents/css/ST-HTML.css" }
 def chartJsUrl() { return "https://www.gstatic.com/charts/loader.js" }
 
 def getWeatherIcon() {
@@ -1368,8 +1430,8 @@ def getWeatherHTML() {
 		if(!state?.curWeather || !state?.curForecast) {
 			return hideWeatherHtml()
 		}
-		def updateAvail = !state.updateAvailable ? "" : "<h3>Device Update Available!</h3>"
-		def clientBl = state?.clientBl ? """<h3>Your Manager client has been blacklisted!\nPlease contact the Nest Manager developer to get the issue resolved!!!</h3>""" : ""
+		def updateAvail = !state.updateAvailable ? "" : """<div class="greenAlertBanner">Device Update Available!</div>"""
+		def clientBl = state?.clientBl ? """<div class="brightRedAlertBanner">Your Manager client has been blacklisted!\nPlease contact the Nest Manager developer to get the issue resolved!!!</div>""" : ""
 		//def obsrvTime = "Last Updated:\n${convertRfc822toDt(state?.curWeather?.current_observation?.observation_time_rfc822)}"
 		def obsrvTime = "Last Updated:\n${state?.curWeather?.current_observation?.observation_time_rfc822}"
 
@@ -1486,6 +1548,31 @@ def getWeatherHTML() {
 				</div>
 			"""
 		}
+
+		def wAlertHtml = ""
+		def alertCnt = state?.walertCount as Integer
+		//log.debug "Weather Alert Count: ${state.walertCount}"   // count of current alerts
+
+		if(alertCnt > 0) {
+			for(int i=1; i < alertCnt.toInteger()+1; i++) {
+				if(state?."walert${i}" && state?."walertMessage${i}") {
+					wAlertHtml += """
+						<div class="redAlertBanner"><a class=\"alert-modal${i}\">${alertCnt > 1 ? "Alert ${i}: " : ""}${state?."walert${i}"}</a></div>
+						<script>
+							\$('.alert-modal${i}').click(function(){
+								vex.dialog.alert({ unsafeMessage: `
+									<h2 class="alertModalTitle">${alertCnt > 1 ? "#${i}: " : ""}${state?."walert${i}"}</h2>
+									<p>${state?."walertMessage${i}"}</p>
+								`, className: 'vex-theme-top' })
+							});
+						</script>
+					"""
+					//log.debug "Alert $i Description: ${state."walert${i}"}"   // description  1,2,3
+					//log.debug "Alert $i Message: ${state."walertMessage${i}"}"  // full message
+				}
+			}
+		}
+
 		def mainHtml = """
 		<!DOCTYPE html>
 		<html>
@@ -1506,25 +1593,17 @@ def getWeatherHTML() {
 				<link rel="stylesheet" href="${getFileBase64("https://cdnjs.cloudflare.com/ajax/libs/vex-js/3.0.0/css/vex-theme-top.css", "text", "css")}" />
 				<script>vex.defaultOptions.className = 'vex-theme-default'</script>
 				<style>
-					.vex.vex-theme-default .vex-content {
-						width: 300px;
-					}
+					.vex.vex-theme-default .vex-content { width: 95%; padding: 3px;	}
 				</style>
 			</head>
 			<body>
 				${clientBl}
 				${updateAvail}
 				<div class="container">
+
+				${wAlertHtml}
+
 				<h4>Current Weather Conditions</h4>
-				<h3><a class=\"alert-modal\">${state?.walert}</a></h3>
-				<script>
-					\$('.alert-modal').click(function(){
-						vex.dialog.alert({
-							message: ' ${state?.walertMessage}',
-							className: 'vex-theme-top' // Overwrites defaultOptions
-						})
-					});
-				</script>
 				<h1 class="bottomBorder"> ${state?.curWeather?.current_observation?.display_location?.full} </h1>
 					<div class="row">
 						<div class="six columns">
