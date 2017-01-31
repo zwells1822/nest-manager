@@ -36,8 +36,8 @@ definition(
 
 include 'asynchttp_v1'
 
-def appVersion() { "4.5.1" }
-def appVerDate() { "1-26-2017" }
+def appVersion() { "4.5.2" }
+def appVerDate() { "1-30-2017" }
 
 preferences {
 	//startPage
@@ -135,6 +135,7 @@ def startPage() {
 
 def authPage() {
 	//LogTrace("authPage()")
+	generateInstallId()
 	if(!atomicState?.accessToken) { getAccessToken() }
 	if(!atomicState?.usageMetricsStore) { initAppMetricStore() }
 	def preReqOk = (atomicState?.preReqTested == true) ? true : preReqCheck()
@@ -2565,7 +2566,8 @@ def ok2PollDevice() {
 	if(atomicState?.needDevPoll) { return true }
 	def pollTime = !settings?.pollValue ? 180 : settings?.pollValue.toInteger()
 	def val = pollTime/3
-	if(val > 60) { val = 50 }
+	val = Math.max(Math.min(val.toInteger(), 50),25)
+	//if(val > 60) { val = 50 }
 	return ( ((getLastDevicePollSec() + val) > pollTime) ? true : false )
 }
 
@@ -2574,7 +2576,8 @@ def ok2PollStruct() {
 	if(atomicState?.needStrPoll) { return true }
 	def pollStrTime = !settings?.pollStrValue ? 180 : settings?.pollStrValue.toInteger()
 	def val = pollStrTime/3
-	if(val > 60) { val = 50 }
+	val = Math.max(Math.min(val.toInteger(), 50),25)
+	//if(val > 60) { val = 50 }
 	return ( ((getLastStructPollSec() + val) > pollStrTime || !atomicState?.structData) ? true : false )
 }
 
@@ -3274,7 +3277,7 @@ def procNestApiCmd(uri, typeId, type, obj, objVal, qnum, redir = false) {
 
 def apiRespHandler(code, errMsg, methodName) {
 	//log.warn "[$methodName] | Status: (${code}) | Error Message: ${errMsg}"
-	if (!(code.toInteger() in [200, 307])) {
+	if (!(code?.toInteger() in [200, 307])) {
 		def result = ""
 		switch(code) {
 			case 400:
@@ -4535,7 +4538,6 @@ def removeTestDevs() {
 
 def preReqCheck() {
 	//LogTrace("preReqCheckTest()")
-	generateInstallId()
 	if(!atomicState?.installData) { atomicState?.installData = ["initVer":appVersion(), "dt":getDtNow().toString(), "freshInstall":false, "shownDonation":false, "shownFeedback":false] }
 	if(!location?.timeZone || !location?.zipCode) {
 		atomicState.preReqTested = false
@@ -4626,7 +4628,6 @@ def callback() {
 
 			if(atomicState?.authToken) {
 				LogAction("Nest AuthToken Generated SUCCESSFULLY", "info", true)
-				generateInstallId
 				success()
 			} else {
 				LogAction("Failure Generating Nest AuthToken", "error", true)
@@ -4658,10 +4659,14 @@ def revokeNestToken() {
 			}
 		}
 		catch (ex) {
-			log.error "revokeNestToken Exception:", ex
-			atomicState.authToken = null
-			sendExceptionData(ex, "revokeNestToken")
-			return false
+			if(ex?.message?.toString() == "Not Found") {
+				return true
+			} else {
+				log.error "revokeNestToken Exception:", ex
+				atomicState.authToken = null
+				sendExceptionData(ex, "revokeNestToken")
+				return false
+			}
 		}
 	}
 }
@@ -6056,6 +6061,7 @@ def sendExceptionData(ex, methodName, isChild = false, autoType = null) {
 		exCnt = atomicState?.appExceptionCnt ? atomicState?.appExceptionCnt + 1 : 1
 		atomicState?.appExceptionCnt = exCnt ?: 1
 		if(settings?.optInSendExceptions || settings?.optInSendExceptions == null) {
+			generateInstallId()
 			def appType = isChild && autoType ? "automationApp/${autoType}" : "managerApp"
 			def exData
 			if(isChild) {
@@ -6080,6 +6086,7 @@ def sendChildExceptionData(devType, devVer, ex, methodName) {
 	exCnt = atomicState?.childExceptionCnt ? atomicState?.childExceptionCnt + 1 : 1
 	atomicState?.childExceptionCnt = exCnt ?: 1
 	if(settings?.optInSendExceptions || settings?.optInSendExceptions == null) {
+		generateInstallId()
 		def exData = ["deviceType":devType, "devVersion":(devVer ?: "Not Available"), "methodName":methodName, "errorMsg":exString, "errorDt":getDtNow().toString()]
 		def results = new groovy.json.JsonOutput().toJson(exData)
 		sendFirebaseData(results, "${getDbExceptPath()}/${devType}/${methodName}/${atomicState?.installationId}.json", "post", "Exception")
@@ -7685,18 +7692,19 @@ def getRemoteSenTemp() {
 }
 
 def fixTempSetting(Double temp) {
-	if(temp) {
+	def newtemp = temp
+	if(temp != null) {
 		if(getTemperatureScale() == "C") {
 			if(temp > 35) {    // setting was done in F
-				temp = roundTemp( (temp - 32) * 5/9 as Double)
+				newtemp = roundTemp( (newtemp - 32.0) * (5/9) as Double)
 			}
 		} else if(getTemperatureScale() == "F") {
 			if(temp < 40) {    // setting was done in C
-				temp = roundTemp( ((temp * 9/5) + 32)).toInteger()
+				newtemp = roundTemp( ((newtemp * (9/5) as Double) + 32.0) ).toInteger()
 			}
 		}
 	}
-	return temp
+	return newtemp
 }
 
 def getRemSenCoolSetTemp() {
@@ -8326,7 +8334,7 @@ def extTmpTempOk() {
 		def intTemp = extTmpTstat ?  getRemoteSenTemp().toDouble() : null
 		def extTemp = getExtTmpTemperature()
 		def curMode = extTmpTstat.currentnestThermostatMode.toString()
-		def dpLimit = getComfortDewpoint(extTmpTstat)
+		def dpLimit = getComfortDewpoint(extTmpTstat, true)
 		def curDp = getExtTmpDewPoint()
 		def diffThresh = Math.abs(getExtTmpTempDiffVal())
 
@@ -8347,7 +8355,7 @@ def extTmpTempOk() {
 		def dpOk = (curDp < dpLimit) ? true : false
 		if(!dpOk) { retval = false }
 
-		def str = "enough different (${tempDiff})"
+		def str
 
 /*
 		def modeEco = (curMode in ["eco"]) ? true : false
@@ -8376,6 +8384,7 @@ def extTmpTempOk() {
 				str = "within range (${desiredHeatTemp} ${desiredCoolTemp})"
 			}
 		}
+		def tempDiff
 
 		if(!modeAuto && retval) {
 			def desiredTemp = getDesiredTemp(curMode)
@@ -8384,7 +8393,8 @@ def extTmpTempOk() {
 				LogAction("extTmpTempOk: No Desired Temp found, using interior Temp", "warn", true)
 				retval = false
 			} else {
-				def tempDiff = Math.abs(extTemp - desiredTemp)
+				tempDiff = Math.abs(extTemp - desiredTemp)
+				str = "enough different (${tempDiff})"
 				//LogAction("extTmpTempOk: Outside Temp: ${extTemp} | Temp Threshold: ${diffThresh} | Actual Difference: ${tempDiff} | Outside Dew point: ${curDp} | Dew point Limit: ${dpLimit}", "debug", false)
 
 				if(diffThresh && tempDiff < diffThresh) {
@@ -12022,14 +12032,16 @@ def getComfortHumidity(tstat) {
 */
 
 def getComfortDewpoint(tstat, usedefault=true) {
-	def maxDew = tstat?.currentState("comfortDewpointMax")?.doubleValue ?: 0.0
+	def maxDew = tstat?.currentState("comfortDewpointMax")?.doubleValue
+	maxDew = maxDew ?: 0.0
 	if(maxDew == 0.0) {
 		if(usedefault) {
 			maxDew = (getTemperatureScale() == "C") ? 19 : 66
 			return maxDew.toDouble()
 		}
+		return null
 	}
-	return null
+	return maxDew
 }
 
 def getSafetyTempsOk(tstat) {
@@ -12046,11 +12058,13 @@ def getSafetyTempsOk(tstat) {
 }
 
 def getGlobalDesiredHeatTemp() {
-	return parent?.settings?.locDesiredHeatTemp?.toDouble() ?: null
+	def t0 = parent?.settings?.locDesiredHeatTemp?.toDouble()
+	return t0 ?: null
 }
 
 def getGlobalDesiredCoolTemp() {
-	return parent?.settings?.locDesiredCoolTemp?.toDouble() ?: null
+	def t0 = parent?.settings?.locDesiredCoolTemp?.toDouble()
+	return t0 ?: null
 }
 
 def getClosedContacts(contacts) {
