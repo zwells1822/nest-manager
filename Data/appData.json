@@ -14,19 +14,11 @@
         "msgId": "",
         "message": "",
         "type": "info",
-        "msgs": {
-            "1": {
-                "msgId": "7lVTfVCjHA",
-                "message": "You must obey me at all costs ;)",
-                "type": "warn",
-                "expireDt": "Wed Feb 15 00:00:00 EST 2017"
-            },
-            "2": {
-                "msgId": "lHIlxkdevI",
-                "message": "There is something super important to say",
-                "type": "info",
-                "expireDt": "Wed Feb 14 22:15:00 EST 2017"
-            }
+        "devBannerMsg": {
+            "msgId": "7lVTfVCjHA",
+            "message": "You must obey me at all costs ;)",
+            "type": "warn",
+            "expireDt": "Wed Feb 15 00:00:00 EST 2017"
         }
     },
     "updater": {
