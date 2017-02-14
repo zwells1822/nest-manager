@@ -13,7 +13,21 @@
     "broadcast": {
         "msgId": "",
         "message": "",
-        "type": "info"
+        "type": "info",
+        "msgs": {
+            "1": {
+                "msgId": "7lVTfVCjHA",
+                "message": "You must obey me at all costs ;)",
+                "type": "warn",
+                "expireDt": "Wed Feb 15 00:00:00 EST 2017"
+            },
+            "2": {
+                "msgId": "lHIlxkdevI",
+                "message": "There is something super important to say",
+                "type": "info",
+                "expireDt": "Wed Feb 14 22:15:00 EST 2017"
+            }
+        }
     },
     "updater": {
         "updateVer": 1,
@@ -23,7 +37,7 @@
         "setupVersion": 2,
         "versions": {
             "app": {
-                "ver": "4.5.2"
+                "ver": "4.5.1"
             },
             "thermostat": {
                 "ver": "4.5.1"
@@ -79,6 +93,11 @@
         "protBattTimeout": 1500,
         "tstatTimeout": 35,
         "longTimeout": 120,
-        "timeout": 35
+        "timeout": 35,
+        "enabled": true
+    },
+    "devStatusPage": {
+        "enabled": true,
+        "path": "/Data/status_content.txt"
     }
 }
