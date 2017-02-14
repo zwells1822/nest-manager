@@ -383,9 +383,21 @@ tr {
 	background: gray;
 }
 
+.sched td {
+	font-size: 4.6vw;
+}
+
 .schedFill {
 	background: gray;
 	color: white;
 	text-align: center;
 	padding: 4px;
+}
+
+.tempSrc th {
+	font-size: 4.8vw;
+	font-weight: bold;
+	background: transparent;
+	text-decoration: underline;
+	color: gray;
 }
