@@ -383,8 +383,20 @@ tr {
 	background: gray;
 }
 
-.sched td {
-	
+.slideFooterMsg {
+	font-size: 3.0vw;
+	padding: 20px;
+	position: absolute;
+	width: 95%;
+	bottom: 0;
+	horizontal-align: center;
+	vertical-align: bottom;
+}
+
+.pageFooterBtn {
+	padding: 10px;
+	horizontal-align: center;
+	vertical-align: bottom;
 }
 
 .schedFill {
