@@ -384,7 +384,7 @@ tr {
 }
 
 .sched td {
-	font-size: 4.6vw;
+	
 }
 
 .schedFill {
@@ -395,9 +395,14 @@ tr {
 }
 
 .tempSrc th {
-	font-size: 4.8vw;
+	font-size: 4.1vw;
 	font-weight: bold;
 	background: transparent;
 	text-decoration: underline;
 	color: gray;
+}
+
+.swiper-container {
+    width: 99%;
+    min-height: 400px;
 }
